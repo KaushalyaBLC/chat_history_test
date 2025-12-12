@@ -25,10 +25,7 @@ async function importPrivateKey(pemKey: string): Promise<CryptoKey> {
 
   // Convert base64 to ArrayBuffer
   const binaryDer = atob(pemContents);
-  const bytes = new Uint8Array(binaryDer.length);
-  for (let i = 0; i < binaryDer.length; i++) {
-    bytes[i] = binaryDer.charCodeAt(i);
-  }
+  const bytes = Uint8Array.from(binaryDer, char => char.charCodeAt(0));
 
   // Import as CryptoKey
   return await crypto.subtle.importKey(
@@ -46,19 +43,15 @@ async function importPrivateKey(pemKey: string): Promise<CryptoKey> {
 /**
  * Base64 string to Uint8Array
  */
-function base64ToUint8Array(base64: string): Uint8Array {
+function base64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
 }
 
 /**
  * Decompress gzip data in browser
  */
-async function decompressGzip(data: Uint8Array): Promise<Uint8Array> {
+async function decompressGzip(data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
   // Create a proper ArrayBuffer copy
   const buffer = new ArrayBuffer(data.length);
   const copy = new Uint8Array(buffer);
@@ -69,7 +62,7 @@ async function decompressGzip(data: Uint8Array): Promise<Uint8Array> {
     new DecompressionStream('gzip')
   );
   const decompressed = await new Response(stream).arrayBuffer();
-  return new Uint8Array(decompressed);
+  return Uint8Array.from(new Uint8Array(decompressed));
 }
 
 /**
@@ -122,7 +115,7 @@ async function decryptJsonSnapshot(
     cipherWithTag
   );
 
-  let finalBytes = new Uint8Array(plainBytes);
+  let finalBytes = Uint8Array.from(new Uint8Array(plainBytes));
 
   // Decompress if needed
   if (enc.compression === 'gzip') {
@@ -495,7 +488,7 @@ async function decryptOsnpSnapshot(
     cipherWithTag
   );
 
-  let finalBytes = new Uint8Array(plainBytes);
+  let finalBytes = Uint8Array.from(new Uint8Array(plainBytes));
 
   // Decompress if needed
   if (header.compression === 'gzip') {

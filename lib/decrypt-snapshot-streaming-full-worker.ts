@@ -15,6 +15,13 @@
 
 import { IndexedDBManager, type SnapshotMetadata, type Message } from './indexeddb-manager';
 
+type InlineWorker = {
+  postMessage: (message: any, transfer?: Transferable[] | StructuredSerializeOptions) => void;
+  terminate: () => void;
+  onmessage: ((event: MessageEvent<any>) => void) | null;
+  onerror: ((event: ErrorEvent) => void) | null;
+};
+
 export interface StreamingProgress {
   stage: 'downloading' | 'decrypting' | 'processing' | 'saving' | 'completed' | 'error';
   progress: number; // 0-100
@@ -33,7 +40,7 @@ const CONFIG = {
 /**
  * Decrypt worker - runs in separate thread
  */
-function createDecryptWorker(): Worker {
+function createDecryptWorker(): InlineWorker {
   // Inline the entire decryption logic into worker
   const workerCode = `
     // Import decryption functions (inline the entire decrypt-snapshot.ts)
@@ -71,7 +78,7 @@ function createDecryptWorker(): Worker {
   `;
 
   const blob = new Blob([workerCode], { type: 'application/javascript' });
-  return new Worker(URL.createObjectURL(blob));
+  return new Worker(URL.createObjectURL(blob)) as InlineWorker;
 }
 
 /**
@@ -161,7 +168,7 @@ function createDecryptFunctions(): string {
  * Save worker pool - same as before but optimized
  */
 class SaveWorkerPool {
-  private workers: Worker[] = [];
+  private workers: InlineWorker[] = [];
   private availableWorkers: number[] = [];
   private taskQueue: Array<{
     chunk: Message[];
@@ -257,7 +264,7 @@ class SaveWorkerPool {
 
     for (let i = 0; i < this.workerCount; i++) {
       const blob = new Blob([workerCode], { type: 'application/javascript' });
-      const worker = new Worker(URL.createObjectURL(blob));
+      const worker = new Worker(URL.createObjectURL(blob)) as InlineWorker;
 
       worker.onmessage = (e) => this.handleWorkerMessage(i, e.data);
       this.workers.push(worker);
@@ -338,7 +345,7 @@ export async function decryptAndStreamToIndexedDBFullWorker(
   onProgress?: (progress: StreamingProgress) => void
 ): Promise<void> {
   const dbManager = new IndexedDBManager();
-  let decryptWorker: Worker | null = null;
+  let decryptWorker: InlineWorker | null = null;
   let saveWorkerPool: SaveWorkerPool | null = null;
 
   try {
@@ -490,8 +497,8 @@ export async function decryptAndStreamToIndexedDBFullWorker(
     throw error;
 
   } finally {
-    if (decryptWorker) decryptWorker.terminate();
-    if (saveWorkerPool) saveWorkerPool.terminate();
+    (decryptWorker as unknown as { terminate?: () => void } | null)?.terminate?.();
+    (saveWorkerPool as unknown as { terminate?: () => void } | null)?.terminate?.();
   }
 }
 
